@@ -1,0 +1,233 @@
+[
+    {
+        "timestamp": "2026-06-29 15:22:26",
+        "inputs": {
+            "Annual_Rainfall": 4200,
+            "Seasonal_Rainfall": 1350,
+            "Cloud_Cover": 95,
+            "Humidity": 96,
+            "Temperature": 19.8,
+            "Visibility": 2.5,
+            "Pressure": 988,
+            "Wind_Speed": 52.4,
+            "River_Level": 6.85,
+            "Soil_Moisture": 88
+        },
+        "probability": 0.9999,
+        "confidence": 0.9999,
+        "risk_level": "Critical",
+        "verdict": "Severe Flood Impending",
+        "weather_summary": "Extreme meteorological indices: extreme rainfall volumes, near-complete soil saturation, and rivers exceeding bankfull levels.",
+        "action_advisory": "IMMEDIATE EMERGENCY EVACUATION. Mobilize Search & Rescue teams. Close endangered highway sectors. Activate alert sirens."
+    },
+    {
+        "timestamp": "2026-06-29 15:22:05",
+        "inputs": {
+            "Annual_Rainfall": 1000,
+            "Seasonal_Rainfall": 200,
+            "Cloud_Cover": 10,
+            "Humidity": 30,
+            "Temperature": 27,
+            "Visibility": 1,
+            "Pressure": 980,
+            "Wind_Speed": 7,
+            "River_Level": 1,
+            "Soil_Moisture": 10
+        },
+        "probability": 0.1388,
+        "confidence": 0.8612,
+        "risk_level": "Low",
+        "verdict": "Low Inundation Risk",
+        "weather_summary": "Precipitation indexes are present but low. River telemetry shows minor swelling, but remains within channel capacity.",
+        "action_advisory": "Routine operations. Inspect local urban drainage grates and clear blockages. Alert stations."
+    },
+    {
+        "timestamp": "2026-06-29 15:22:00",
+        "inputs": {
+            "Annual_Rainfall": 4200,
+            "Seasonal_Rainfall": 1350,
+            "Cloud_Cover": 95,
+            "Humidity": 96,
+            "Temperature": 19.8,
+            "Visibility": 2.5,
+            "Pressure": 988,
+            "Wind_Speed": 52.4,
+            "River_Level": 6.85,
+            "Soil_Moisture": 88
+        },
+        "probability": 0.9999,
+        "confidence": 0.9999,
+        "risk_level": "Critical",
+        "verdict": "Severe Flood Impending",
+        "weather_summary": "Extreme meteorological indices: extreme rainfall volumes, near-complete soil saturation, and rivers exceeding bankfull levels.",
+        "action_advisory": "IMMEDIATE EMERGENCY EVACUATION. Mobilize Search & Rescue teams. Close endangered highway sectors. Activate alert sirens."
+    },
+    {
+        "timestamp": "2026-06-29 15:21:06",
+        "inputs": {
+            "Annual_Rainfall": 1500,
+            "Seasonal_Rainfall": 1500,
+            "Cloud_Cover": 100,
+            "Humidity": 90,
+            "Temperature": 43,
+            "Visibility": 15,
+            "Pressure": 1030,
+            "Wind_Speed": 75,
+            "River_Level": 7,
+            "Soil_Moisture": 85
+        },
+        "probability": 0.6044,
+        "confidence": 0.6044,
+        "risk_level": "Moderate",
+        "verdict": "Moderate Runoff Anticipated",
+        "weather_summary": "Elevated seasonal rainfall accumulation and high humidity metrics. River height approaches warnings levels.",
+        "action_advisory": "Heightened monitoring. Clear debris from low-bridge conduits. Stand by regional response teams."
+    },
+    {
+        "timestamp": "2026-06-26 22:17:55",
+        "inputs": {
+            "Annual_Rainfall": 2000,
+            "Seasonal_Rainfall": 800,
+            "Cloud_Cover": 30,
+            "Humidity": 40,
+            "Temperature": 30,
+            "Visibility": 6,
+            "Pressure": 990,
+            "Wind_Speed": 20,
+            "River_Level": 3,
+            "Soil_Moisture": 78
+        },
+        "probability": 0.3601,
+        "confidence": 0.6399,
+        "risk_level": "Moderate",
+        "verdict": "Moderate Runoff Anticipated",
+        "weather_summary": "Elevated seasonal rainfall accumulation and high humidity metrics. River height approaches warnings levels.",
+        "action_advisory": "Heightened monitoring. Clear debris from low-bridge conduits. Stand by regional response teams."
+    },
+    {
+        "timestamp": "2026-06-26 22:08:51",
+        "inputs": {
+            "Annual_Rainfall": 2400,
+            "Seasonal_Rainfall": 800,
+            "Cloud_Cover": 65,
+            "Humidity": 80,
+            "Temperature": 28,
+            "Visibility": 10,
+            "Pressure": 1000,
+            "Wind_Speed": 18,
+            "River_Level": 5,
+            "Soil_Moisture": 50
+        },
+        "probability": 0.45,
+        "confidence": 0.55,
+        "risk_level": "Moderate",
+        "verdict": "Moderate Runoff Anticipated",
+        "weather_summary": "Elevated seasonal rainfall accumulation and high humidity metrics. River height approaches warnings levels.",
+        "action_advisory": "Heightened monitoring. Clear debris from low-bridge conduits. Stand by regional response teams."
+    },
+    {
+        "timestamp": "2026-06-26 18:22:44",
+        "inputs": {
+            "Annual_Rainfall": 4000,
+            "Seasonal_Rainfall": 1000,
+            "Cloud_Cover": 80,
+            "Humidity": 90,
+            "Temperature": 19,
+            "Visibility": 8,
+            "Pressure": 980,
+            "Wind_Speed": 70,
+            "River_Level": 7,
+            "Soil_Moisture": 60
+        },
+        "probability": 0.8951,
+        "confidence": 0.8951,
+        "risk_level": "Critical",
+        "verdict": "Severe Flood Impending",
+        "weather_summary": "Extreme meteorological indices: extreme rainfall volumes, near-complete soil saturation, and rivers exceeding bankfull levels.",
+        "action_advisory": "IMMEDIATE EMERGENCY EVACUATION. Mobilize Search & Rescue teams. Close endangered highway sectors. Activate alert sirens."
+    },
+    {
+        "timestamp": "2026-06-26 17:29:51",
+        "inputs": {
+            "Annual_Rainfall": 4000,
+            "Seasonal_Rainfall": 1000,
+            "Cloud_Cover": 85,
+            "Humidity": 50,
+            "Temperature": 20,
+            "Visibility": 11,
+            "Pressure": 1000,
+            "Wind_Speed": 70,
+            "River_Level": 5,
+            "Soil_Moisture": 70
+        },
+        "probability": 0.7841,
+        "confidence": 0.7841,
+        "risk_level": "High",
+        "verdict": "Flood Anticipated",
+        "weather_summary": "Significant atmospheric instability. Heavy cloud layers, very high soil saturation, and rising river banks detected.",
+        "action_advisory": "Activate emergency protocols. Stage sandbags, prepare heavy-duty water pumps, and warn low-altitude residents."
+    },
+    {
+        "timestamp": "2026-06-26 14:18:09",
+        "inputs": {
+            "Annual_Rainfall": 2400,
+            "Seasonal_Rainfall": 800,
+            "Cloud_Cover": 75,
+            "Humidity": 80,
+            "Temperature": 28,
+            "Visibility": 10,
+            "Pressure": 1008,
+            "Wind_Speed": 18.2,
+            "River_Level": 2.1,
+            "Soil_Moisture": 45
+        },
+        "probability": 0.3211,
+        "confidence": 0.6789,
+        "risk_level": "Low",
+        "verdict": "Low Inundation Risk",
+        "weather_summary": "Precipitation indexes are present but low. River telemetry shows minor swelling, but remains within channel capacity.",
+        "action_advisory": "Routine operations. Inspect local urban drainage grates and clear blockages. Alert stations."
+    },
+    {
+        "timestamp": "2026-06-26 13:45:04",
+        "inputs": {
+            "Annual_Rainfall": 1200,
+            "Seasonal_Rainfall": 350,
+            "Cloud_Cover": 20,
+            "Humidity": 45,
+            "Temperature": 32.4,
+            "Visibility": 12,
+            "Pressure": 1018,
+            "Wind_Speed": 8.5,
+            "River_Level": 1.25,
+            "Soil_Moisture": 25
+        },
+        "probability": 0.0002,
+        "confidence": 0.9998,
+        "risk_level": "Very Low",
+        "verdict": "No Inundation Threat",
+        "weather_summary": "Weather signals are stable. Rainfall and river levels are well within safety tolerances with high atmospheric visibility.",
+        "action_advisory": "Hydrological flows normal. Continue standard meteorological surveillance. No alerts needed."
+    },
+    {
+        "timestamp": "2026-06-26 13:44:16",
+        "inputs": {
+            "Annual_Rainfall": 4200,
+            "Seasonal_Rainfall": 1350,
+            "Cloud_Cover": 95,
+            "Humidity": 96,
+            "Temperature": 19.8,
+            "Visibility": 2.5,
+            "Pressure": 988,
+            "Wind_Speed": 52.4,
+            "River_Level": 6.85,
+            "Soil_Moisture": 88
+        },
+        "probability": 0.9999,
+        "confidence": 0.9999,
+        "risk_level": "Critical",
+        "verdict": "Severe Flood Impending",
+        "weather_summary": "Extreme meteorological indices: extreme rainfall volumes, near-complete soil saturation, and rivers exceeding bankfull levels.",
+        "action_advisory": "IMMEDIATE EMERGENCY EVACUATION. Mobilize Search & Rescue teams. Close endangered highway sectors. Activate alert sirens."
+    }
+]

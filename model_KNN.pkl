@@ -1,0 +1,622 @@
+import os
+import json
+import joblib
+from datetime import datetime
+import pandas as pd
+import numpy as np
+from flask import Flask, request, jsonify, render_template, send_file, Response, redirect, session, url_for
+import io
+import random
+
+# Import database module
+import database
+
+# ReportLab libraries for PDF compilation
+from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+
+app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "rising_waters_secret_key")
+
+
+MODEL_DIR = "model"
+METRICS_PATH = os.path.join(MODEL_DIR, "metrics.json")
+
+# Global model variables
+models_dict = {}
+scaler = None
+metrics_metadata = None
+
+def init_ml_components():
+    """Load all 4 ML models and the scaler."""
+    global models_dict, scaler, metrics_metadata
+    
+    # Initialize SQLite database
+    database.init_db()
+    
+    # Check if model files exist; train if missing
+    model_names = ["Decision Tree", "Random Forest", "KNN", "XGBoost"]
+    model_paths = [os.path.join(MODEL_DIR, f"model_{m}.pkl") for m in model_names]
+    scaler_path = os.path.join(MODEL_DIR, "scaler.pkl")
+    
+    if any(not os.path.exists(p) for p in model_paths) or not os.path.exists(scaler_path) or not os.path.exists(METRICS_PATH):
+        print("Required model pickles not found. Initiating auto-training pipeline...")
+        from notebook.train import run_ml_pipeline
+        run_ml_pipeline()
+        
+    try:
+        scaler = joblib.load(scaler_path)
+        for name in model_names:
+            models_dict[name] = joblib.load(os.path.join(MODEL_DIR, f"model_{name}.pkl"))
+            
+        with open(METRICS_PATH, "r") as f:
+            metrics_metadata = json.load(f)
+        print("All 4 ML models and scaler successfully loaded into memory.")
+    except Exception as e:
+        print(f"Error loading ML components: {e}")
+
+# Call initialization
+init_ml_components()
+
+def get_verdict_details(probability):
+    confidence = max(probability, 1.0 - probability)
+    if probability < 0.12:
+        risk_level = "Very Low"
+        verdict = "No Inundation Threat"
+        action_advisory = "Hydrological flows normal. Continue standard meteorological surveillance. No alerts needed."
+        weather_summary = "Weather signals are stable. Rainfall and river levels are well within safety tolerances with high atmospheric visibility."
+    elif probability < 0.35:
+        risk_level = "Low"
+        verdict = "Low Inundation Risk"
+        action_advisory = "Routine operations. Inspect local urban drainage grates and clear blockages. Alert stations."
+        weather_summary = "Precipitation indexes are present but low. River telemetry shows minor swelling, but remains within channel capacity."
+    elif probability < 0.65:
+        risk_level = "Moderate"
+        verdict = "Moderate Runoff Anticipated"
+        action_advisory = "Heightened monitoring. Clear debris from low-bridge conduits. Stand by regional response teams."
+        weather_summary = "Elevated seasonal rainfall accumulation and high humidity metrics. River height approaches warnings levels."
+    elif probability < 0.85:
+        risk_level = "High"
+        verdict = "Flood Anticipated"
+        action_advisory = "Activate emergency protocols. Stage sandbags, prepare heavy-duty water pumps, and warn low-altitude residents."
+        weather_summary = "Significant atmospheric instability. Heavy cloud layers, very high soil saturation, and rising river banks detected."
+    else:
+        risk_level = "Critical"
+        verdict = "Severe Flood Impending"
+        action_advisory = "IMMEDIATE EMERGENCY EVACUATION. Mobilize Search & Rescue teams. Close endangered highway sectors. Activate alert sirens."
+        weather_summary = "Extreme meteorological indices: extreme rainfall volumes, near-complete soil saturation, and rivers exceeding bankfull levels."
+    return {
+        "risk_level": risk_level,
+        "verdict": verdict,
+        "action_advisory": action_advisory,
+        "weather_summary": weather_summary,
+        "confidence": confidence
+    }
+
+# Route login checking middleware
+@app.before_request
+def require_login():
+    allowed_routes = ['login', 'google_login', 'google_callback', 'forgot_password', 'static']
+    
+    # Determine the endpoint name from the request path
+    endpoint = request.endpoint
+    if endpoint is None:
+        return None
+        
+    if endpoint in allowed_routes or request.path.startswith('/static/'):
+        return None
+        
+    if not session.get('user'):
+        return redirect(url_for('login'))
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if session.get('user'):
+        return redirect(url_for('index'))
+        
+    error = None
+    success = session.pop('success', None)
+    
+    if request.method == 'POST':
+        email = request.form.get('email')
+        password = request.form.get('password')
+        
+        user = database.verify_user(email, password)
+        if user:
+            session['user'] = user
+            return redirect(url_for('index'))
+        else:
+            error = "Invalid email address or password. Please try again."
+            
+    return render_template('login.html', error=error, success=success)
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+@app.route('/google-login')
+def google_login():
+    if session.get('user'):
+        return redirect(url_for('index'))
+    return render_template('google_oauth.html')
+
+@app.route('/google-callback', methods=['POST'])
+def google_callback():
+    email = request.form.get('email')
+    user = database.check_email_exists(email)
+    if user:
+        session['user'] = user
+        return redirect(url_for('index'))
+    else:
+        return render_template('login.html', error="Failed to authenticate with Google. User record not found.")
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    stage = 'email'
+    email = None
+    error = None
+    success = None
+    active_otp = None
+    
+    if request.method == 'POST':
+        step = request.form.get('step')
+        email = request.form.get('email')
+        
+        if step == 'send_otp':
+            user = database.check_email_exists(email)
+            if user:
+                # Generate 6 digit OTP code
+                otp = str(random.randint(100000, 999999))
+                session['reset_otp'] = otp
+                session['reset_email'] = email
+                
+                # Output to console
+                print("\n" + "="*50)
+                print(f"[OTP DEBUG] PASSWORD RESET OTP FOR {email}: {otp}")
+                print("="*50 + "\n")
+                
+                # Pass details
+                active_otp = otp
+                stage = 'otp'
+                success = f"Verification code sent to {email}. (Helper preview below for testing)"
+            else:
+                error = "Email address not found. Please verify your input."
+                stage = 'email'
+                
+        elif step == 'verify_otp':
+            entered_otp = request.form.get('otp')
+            session_otp = session.get('reset_otp')
+            email = session.get('reset_email')
+            
+            if entered_otp and entered_otp == session_otp:
+                stage = 'reset'
+                success = "OTP verification successful. You can now set a new password."
+            else:
+                error = "Invalid OTP code. Please enter the correct verification code."
+                stage = 'otp'
+                active_otp = session_otp
+                
+        elif step == 'reset_password':
+            email = session.get('reset_email')
+            password = request.form.get('password')
+            confirm = request.form.get('confirm_password')
+            
+            if password == confirm:
+                database.update_user_password(email, password)
+                # Clear session verification states
+                session.pop('reset_otp', None)
+                session.pop('reset_email', None)
+                session['success'] = "Password reset successful. You can now log in with your new password."
+                return redirect(url_for('login'))
+            else:
+                error = "Passwords do not match. Please verify your inputs."
+                stage = 'reset'
+                
+    return render_template(
+        'forgot_password.html', 
+        stage=stage, 
+        email=email, 
+        error=error, 
+        success=success, 
+        active_otp=active_otp
+    )
+
+@app.route('/')
+def index():
+    # Fetch active model
+    active_model = database.get_active_model()
+    
+    # Get total run count
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM prediction_results;")
+    total_runs = cursor.fetchone()[0]
+    conn.close()
+    
+    # Fetch all models
+    models_list = database.get_models_list()
+    
+    return render_template(
+        'index.html',
+        best_model_name=active_model,
+        total_runs=total_runs,
+        models_list=models_list
+    )
+
+@app.route('/admin/set-model', methods=['POST'])
+def admin_set_model():
+    # Verify admin role
+    user = session.get('user')
+    if not user or user.get('role') != 'Admin':
+        return redirect(url_for('index'))
+        
+    model_name = request.form.get('model_name')
+    if model_name:
+        database.set_active_model(model_name)
+    return redirect(url_for('index'))
+
+@app.route('/predict', methods=['GET', 'POST'])
+def predict():
+    if request.method == 'POST':
+        # Verify Meteorologist/Admin permissions
+        user = session.get('user')
+        if not user or user.get('role') == 'Analyst':
+            return jsonify({"error": "Unauthorized: Only Meteorologists are authorized to perform predictions."}), 403
+            
+        # API Prediction request
+        data = request.get_json()
+        
+        # Extract features in the correct order mapped during training
+        feature_cols = [
+            "Annual_Rainfall", "Seasonal_Rainfall", "Cloud_Cover", 
+            "Humidity", "Temperature", "Visibility", "Pressure", 
+            "Wind_Speed", "River_Level", "Soil_Moisture"
+        ]
+        
+        try:
+            # Parse features
+            features = [float(data.get(col, 0)) for col in feature_cols]
+            
+            # Run scaler & model
+            features_scaled = scaler.transform([features])
+            
+            # Fetch current active model from DB
+            active_model_name = database.get_active_model()
+            active_model = models_dict.get(active_model_name, models_dict.get("Random Forest"))
+            
+            # Get class prediction
+            pred_class = int(active_model.predict(features_scaled)[0])
+            
+            # Get probability
+            prob_arr = active_model.predict_proba(features_scaled)[0]
+            probability = float(prob_arr[1])
+            
+            # Mathematical confidence score
+            confidence = max(probability, 1.0 - probability)
+            
+            # Map Risk Levels based on probability score
+            if probability < 0.12:
+                risk_level = "Very Low"
+                verdict = "No Inundation Threat"
+                action_advisory = "Hydrological flows normal. Continue standard meteorological surveillance. No alerts needed."
+                weather_summary = "Weather signals are stable. Rainfall and river levels are well within safety tolerances with high atmospheric visibility."
+            elif probability < 0.35:
+                risk_level = "Low"
+                verdict = "Low Inundation Risk"
+                action_advisory = "Routine operations. Inspect local urban drainage grates and clear blockages. Alert stations."
+                weather_summary = "Precipitation indexes are present but low. River telemetry shows minor swelling, but remains within channel capacity."
+            elif probability < 0.65:
+                risk_level = "Moderate"
+                verdict = "Moderate Runoff Anticipated"
+                action_advisory = "Heightened monitoring. Clear debris from low-bridge conduits. Stand by regional response teams."
+                weather_summary = "Elevated seasonal rainfall accumulation and high humidity metrics. River height approaches warnings levels."
+            elif probability < 0.85:
+                risk_level = "High"
+                verdict = "Flood Anticipated"
+                action_advisory = "Activate emergency protocols. Stage sandbags, prepare heavy-duty water pumps, and warn low-altitude residents."
+                weather_summary = "Significant atmospheric instability. Heavy cloud layers, very high soil saturation, and rising river banks detected."
+            else:
+                risk_level = "Critical"
+                verdict = "Severe Flood Impending"
+                action_advisory = "IMMEDIATE EMERGENCY EVACUATION. Mobilize Search & Rescue teams. Close endangered highway sectors. Activate alert sirens."
+                weather_summary = "Extreme meteorological indices: extreme rainfall volumes, near-complete soil saturation, and rivers exceeding bankfull levels."
+                
+            res = {
+                "verdict": verdict,
+                "probability": round(probability, 4),
+                "confidence": round(confidence, 4),
+                "risk_level": risk_level,
+                "weather_summary": weather_summary,
+                "action_advisory": action_advisory
+            }
+            
+            # Save transaction to SQLite
+            database.save_prediction_run(user['user_id'], data, res, active_model_name)
+            
+            return jsonify(res)
+            
+        except Exception as e:
+            return jsonify({"error": f"Failed executing ML prediction: {str(e)}"}), 500
+            
+    # GET: render form page
+    return render_template('predict.html')
+
+@app.route('/about')
+def about():
+    # Only Admin and Analyst can access Model Insights
+    user = session.get('user')
+    if not user or user.get('role') not in ['Admin', 'Analyst']:
+        return redirect(url_for('index'))
+        
+    best_model = database.get_active_model()
+    best_metrics = {
+        "accuracy": 0.94,
+        "f1_score": 0.959,
+        "precision": 0.967,
+        "recall": 0.951
+    }
+    
+    if metrics_metadata:
+        best_metrics = metrics_metadata.get("comparison", {}).get(best_model, best_metrics)
+        
+    return render_template(
+        'about.html',
+        best_model_name=best_model,
+        best_model_metrics=best_metrics
+    )
+
+@app.route('/history')
+def get_history():
+    history = database.get_prediction_history(50)
+    for item in history:
+        details = get_verdict_details(item["probability"])
+        item.update(details)
+    return jsonify(history)
+
+@app.route('/history/download')
+def download_history_csv():
+    """Generates and downloads the prediction history ledger from SQLite as CSV."""
+    history = database.get_prediction_history(1000)
+    if not history:
+        return "No prediction logs recorded yet.", 400
+        
+    try:
+        # Flatten structure for CSV export
+        rows = []
+        for item in history:
+            details = get_verdict_details(item["probability"])
+            row = {
+                "Timestamp": item["timestamp"],
+                "Model Used": item["model_name"],
+                "Evaluator": item["user_name"],
+                "Verdict": details["verdict"],
+                "Risk Level": item["risk_level"],
+                "Probability": f"{item['probability']*100:.1f}%",
+                "Confidence": f"{details['confidence']*100:.1f}%",
+                **item["inputs"]
+            }
+            rows.append(row)
+            
+        df = pd.DataFrame(rows)
+        
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False)
+        
+        return Response(
+            csv_buffer.getvalue(),
+            mimetype="text/csv",
+            headers={"Content-disposition": "attachment; filename=flood_prediction_history.csv"}
+        )
+    except Exception as e:
+        return f"Error exporting CSV ledger: {str(e)}", 500
+
+@app.route('/download_pdf')
+def download_prediction_pdf():
+    """Generates a professional emergency dispatch PDF card using ReportLab."""
+    try:
+        # Retrieve prediction data from query parameters
+        verdict = request.args.get('verdict', 'N/A')
+        probability = float(request.args.get('probability', '0'))
+        risk_level = request.args.get('risk_level', 'N/A')
+        confidence = float(request.args.get('confidence', '0'))
+        summary = request.args.get('summary', 'N/A')
+        advisory = request.args.get('advisory', 'N/A')
+        
+        # Weather parameters
+        annual_rainfall = request.args.get('Annual_Rainfall', 'N/A')
+        seasonal_rainfall = request.args.get('Seasonal_Rainfall', 'N/A')
+        cloud_cover = request.args.get('Cloud_Cover', 'N/A')
+        humidity = request.args.get('Humidity', 'N/A')
+        temperature = request.args.get('Temperature', 'N/A')
+        visibility = request.args.get('Visibility', 'N/A')
+        pressure = request.args.get('Pressure', 'N/A')
+        wind_speed = request.args.get('Wind_Speed', 'N/A')
+        river_level = request.args.get('River_Level', 'N/A')
+        soil_moisture = request.args.get('Soil_Moisture', 'N/A')
+        
+        # Create bytes buffer for PDF output
+        pdf_buffer = io.BytesIO()
+        doc = SimpleDocTemplate(pdf_buffer, pagesize=letter, leftMargin=40, rightMargin=40, topMargin=40, bottomMargin=40)
+        story = []
+        
+        # Styling Setup
+        styles = getSampleStyleSheet()
+        
+        # Custom Styles
+        title_style = ParagraphStyle(
+            'DocTitle',
+            parent=styles['Heading1'],
+            fontName='Helvetica-Bold',
+            fontSize=22,
+            textColor=colors.HexColor('#1e3a8a'),
+            spaceAfter=6
+        )
+        
+        subtitle_style = ParagraphStyle(
+            'DocSubtitle',
+            parent=styles['Normal'],
+            fontName='Helvetica',
+            fontSize=10,
+            textColor=colors.HexColor('#64748b'),
+            spaceAfter=24
+        )
+        
+        section_style = ParagraphStyle(
+            'DocSection',
+            parent=styles['Heading2'],
+            fontName='Helvetica-Bold',
+            fontSize=13,
+            textColor=colors.HexColor('#0f172a'),
+            spaceBefore=14,
+            spaceAfter=10
+        )
+        
+        body_style = ParagraphStyle(
+            'DocBody',
+            parent=styles['Normal'],
+            fontName='Helvetica',
+            fontSize=10.5,
+            leading=14,
+            textColor=colors.HexColor('#334155')
+        )
+        
+        advisory_body_style = ParagraphStyle(
+            'AdvisoryBody',
+            parent=styles['Normal'],
+            fontName='Helvetica-Bold',
+            fontSize=10.5,
+            leading=14,
+            textColor=colors.HexColor('#7f1d1d')
+        )
+
+        # Header Title
+        story.append(Paragraph("RISING WATERS - FLOOD ANALYTICS ADVISORY DISPATCH", title_style))
+        story.append(Paragraph(f"Emergency Management ML Predictive Ledger &bull; Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", subtitle_style))
+        
+        # 1. Prediction Results Summary Box (Table styled as card)
+        # Select background color based on risk
+        risk_colors = {
+            'Very Low': '#dcfce7',
+            'Low': '#e0f2fe',
+            'Moderate': '#fef3c7',
+            'High': '#ffedd5',
+            'Critical': '#fee2e2'
+        }
+        text_colors = {
+            'Very Low': '#166534',
+            'Low': '#075985',
+            'Moderate': '#92400e',
+            'High': '#9a3412',
+            'Critical': '#991b1b'
+        }
+        
+        bg_hex = risk_colors.get(risk_level, '#e2e8f0')
+        text_hex = text_colors.get(risk_level, '#1e293b')
+        
+        results_data = [
+            [
+                Paragraph("<b>PREDICTION OUTCOME:</b>", ParagraphStyle('L', parent=body_style, textColor=colors.HexColor('#475569'))), 
+                Paragraph(f"<b>{verdict.upper()}</b>", ParagraphStyle('V', parent=body_style, fontSize=12, textColor=colors.HexColor(text_hex)))
+            ],
+            [
+                Paragraph("<b>RISK LEVEL:</b>", ParagraphStyle('L', parent=body_style, textColor=colors.HexColor('#475569'))), 
+                Paragraph(f"<b>{risk_level.upper()}</b>", ParagraphStyle('R', parent=body_style, fontSize=12, textColor=colors.HexColor(text_hex)))
+            ],
+            [
+                Paragraph("<b>FLOOD PROBABILITY:</b>", ParagraphStyle('L', parent=body_style, textColor=colors.HexColor('#475569'))), 
+                Paragraph(f"{probability*100:.1f}%", body_style)
+            ],
+            [
+                Paragraph("<b>ANALYSIS CONFIDENCE:</b>", ParagraphStyle('L', parent=body_style, textColor=colors.HexColor('#475569'))), 
+                Paragraph(f"{confidence*100:.1f}%", body_style)
+            ]
+        ]
+        
+        results_table = Table(results_data, colWidths=[180, 350])
+        results_table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,-1), colors.HexColor(bg_hex)),
+            ('PADDING', (0,0), (-1,-1), 12),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 10),
+            ('TOPPADDING', (0,0), (-1,-1), 10),
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('LINEBELOW', (0,0), (-1,-2), 0.5, colors.HexColor('#ffffff'))
+        ]))
+        
+        story.append(results_table)
+        story.append(Spacer(1, 16))
+        
+        # 2. Weather Telemetry Inputs Table
+        story.append(Paragraph("METEOROLOGICAL TELEMETRY INPUTS", section_style))
+        
+        weather_data = [
+            [
+                Paragraph("<b>Annual Rainfall:</b>", body_style), Paragraph(f"{annual_rainfall} mm", body_style),
+                Paragraph("<b>Seasonal Rainfall:</b>", body_style), Paragraph(f"{seasonal_rainfall} mm", body_style)
+            ],
+            [
+                Paragraph("<b>Cloud Cover:</b>", body_style), Paragraph(f"{cloud_cover} %", body_style),
+                Paragraph("<b>Humidity:</b>", body_style), Paragraph(f"{humidity} %", body_style)
+            ],
+            [
+                Paragraph("<b>Temperature:</b>", body_style), Paragraph(f"{temperature} &deg;C", body_style),
+                Paragraph("<b>Visibility:</b>", body_style), Paragraph(f"{visibility} km", body_style)
+            ],
+            [
+                Paragraph("<b>Atmospheric Pressure:</b>", body_style), Paragraph(f"{pressure} hPa", body_style),
+                Paragraph("<b>Wind Speed:</b>", body_style), Paragraph(f"{wind_speed} km/h", body_style)
+            ],
+            [
+                Paragraph("<b>River Level gauge:</b>", body_style), Paragraph(f"{river_level} meters", body_style),
+                Paragraph("<b>Soil Moisture content:</b>", body_style), Paragraph(f"{soil_moisture} %", body_style)
+            ]
+        ]
+        
+        weather_table = Table(weather_data, colWidths=[150, 115, 150, 115])
+        weather_table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f8fafc')),
+            ('PADDING', (0,0), (-1,-1), 8),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE')
+        ]))
+        story.append(weather_table)
+        story.append(Spacer(1, 20))
+        
+        # 3. Descriptive Summaries
+        story.append(Paragraph("METEOROLOGICAL ANALYSIS SUMMARY", section_style))
+        story.append(Paragraph(summary, body_style))
+        story.append(Spacer(1, 14))
+        
+        story.append(Paragraph("RECOMMENDED EMERGENCY ADVISORY PROTOCOL", section_style))
+        
+        # Box advisory
+        advisory_box_data = [[
+            Paragraph(f"<b>ADVISORY:</b> {advisory}", advisory_body_style if risk_level in ['High', 'Critical'] else body_style)
+        ]]
+        advisory_table = Table(advisory_box_data, colWidths=[530])
+        advisory_table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#fff5f5') if risk_level in ['High', 'Critical'] else colors.HexColor('#f1f5f9')),
+            ('PADDING', (0,0), (-1,-1), 12),
+            ('BOX', (0,0), (-1,-1), 1.5, colors.HexColor('#fca5a5') if risk_level in ['High', 'Critical'] else colors.HexColor('#cbd5e1')),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE')
+        ]))
+        story.append(advisory_table)
+        
+        # Build Document
+        doc.build(story)
+        pdf_buffer.seek(0)
+        
+        return send_file(
+            pdf_buffer,
+            as_attachment=True,
+            download_name=f"FloodRisk_Dispatch_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+            mimetype="application/pdf"
+        )
+    except Exception as e:
+        return f"Error compiling ReportLab PDF dispatch card: {str(e)}", 500
+
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=5000)

@@ -1,0 +1,216 @@
+# 🌊 Rising Waters – A Machine Learning Approach to Flood Prediction
+
+Rising Waters is a Machine Learning-based web application developed to predict flood risk using meteorological parameters such as rainfall, river discharge, humidity, soil moisture, and temperature. The project combines an end-to-end machine learning pipeline with an interactive Flask web application to assist users in assessing potential flood risks.
+
+---
+
+## 📌 Project Overview
+
+The application enables users to enter weather-related parameters through an intuitive web interface and receive an instant flood risk prediction. Multiple machine learning algorithms were trained and evaluated, with the best-performing model selected for deployment within the application. The system also provides prediction history, downloadable PDF reports, and visual insights into the model's performance.
+
+---
+
+## ✨ Features
+
+- 🌧️ Flood risk prediction using Machine Learning
+- 🤖 Comparison of four machine learning algorithms:
+  - Decision Tree
+  - Random Forest
+  - K-Nearest Neighbors (KNN)
+  - XGBoost
+- 📊 Automatic data preprocessing using StandardScaler
+- 🌐 Interactive Flask web interface
+- 🎨 Dynamic UI themes based on predicted flood risk level
+- 🗄️ Prediction history stored using SQLite
+- 📄 Downloadable PDF prediction reports
+- 📁 CSV export of prediction history
+- ⚡ Predefined weather scenarios for quick testing
+- 📈 Data visualization and model performance analysis
+
+---
+
+## 🧠 Machine Learning Workflow
+
+```text
+Dataset
+   │
+   ▼
+Data Preprocessing
+(StandardScaler)
+   │
+   ▼
+Train-Test Split
+   │
+   ▼
+Model Training
+│
+├── Decision Tree
+├── Random Forest
+├── K-Nearest Neighbors (KNN)
+└── XGBoost
+   │
+   ▼
+Model Evaluation
+   │
+   ▼
+Best Model Selection
+   │
+   ▼
+Model Serialization (.pkl)
+   │
+   ▼
+Flask Web Application
+   │
+   ▼
+Flood Risk Prediction
+```
+
+---
+
+## 📂 Project Structure
+
+```text
+Rising_Waters_Flood_Prediction/
+│
+├── app.py
+├── database.py
+├── requirements.txt
+├── README.md
+├── .gitignore
+├── rising_waters.db
+│
+├── dataset/
+│   ├── generate_dataset.py
+│   ├── flood_data.csv
+│   └── history.json
+│
+├── notebook/
+│   └── train.py
+│
+├── model/
+│   ├── model.pkl
+│   ├── model_DecisionTree.pkl
+│   ├── model_RandomForest.pkl
+│   ├── model_KNN.pkl
+│   ├── model_XGBoost.pkl
+│   ├── scaler.pkl
+│   └── metrics.json
+│
+├── static/
+│   ├── css/
+│   ├── js/
+│   └── images/
+│
+└── templates/
+    ├── base.html
+    ├── index.html
+    ├── predict.html
+    ├── about.html
+    └── contact.html
+```
+
+---
+
+## 🚀 Installation & Setup
+
+### 1️⃣ Clone the Repository
+
+```bash
+git clone <repository-url>
+cd Rising_Waters_Flood_Prediction
+```
+
+### 2️⃣ Create a Virtual Environment
+
+```bash
+python -m venv .venv
+```
+
+### 3️⃣ Activate the Virtual Environment
+
+**Windows**
+
+```bash
+.\.venv\Scripts\activate
+```
+
+**Linux / macOS**
+
+```bash
+source .venv/bin/activate
+```
+
+### 4️⃣ Install Required Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 5️⃣ Run the Application
+
+```bash
+python app.py
+```
+
+Open your browser and visit:
+
+```text
+http://127.0.0.1:5000
+```
+
+---
+
+## 🛠️ Technology Stack
+
+| Category | Technologies |
+|-----------|--------------|
+| Programming Language | Python |
+| Backend Framework | Flask |
+| Machine Learning | Scikit-learn, XGBoost |
+| Data Processing | Pandas, NumPy |
+| Data Visualization | Matplotlib, Seaborn |
+| Database | SQLite |
+| PDF Generation | ReportLab |
+| Frontend | HTML5, CSS3, JavaScript |
+| Icons | Font Awesome |
+| Fonts | Google Fonts |
+
+---
+
+## 📊 Machine Learning Models
+
+The following supervised machine learning algorithms were implemented and evaluated:
+
+- Decision Tree
+- Random Forest
+- K-Nearest Neighbors (KNN)
+- XGBoost
+
+The best-performing model was selected based on evaluation metrics such as Accuracy, Precision, Recall, and F1-Score, and serialized for use within the Flask application.
+
+---
+
+## 📈 Future Enhancements
+
+- Deploy the application on a cloud platform.
+- Integrate real-time weather APIs.
+- Display flood-prone regions using interactive maps.
+- Enable continuous model retraining with newly collected weather data.
+- Develop a mobile application for improved accessibility.
+- Implement automatic alerts and notifications for high-risk flood predictions.
+
+---
+
+## 👨‍💻 Authors
+
+Developed as part of the **IBM SkillsBuild Internship Project** by:
+
+- **Akshaya Sowmya Banka**
+- **Avinash**
+- **Rihana**
+- **Saksham** *(Team Lead)*
+
+---
+
+## 📄 License
+

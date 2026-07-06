@@ -1,0 +1,302 @@
+import os
+import sqlite3
+import json
+from datetime import datetime
+from werkzeug.security import generate_password_hash, check_password_hash
+
+DB_PATH = "rising_waters.db"
+METRICS_PATH = "model/metrics.json"
+
+def get_db_connection():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db():
+    """Initializes the database, creating tables and seeding initial data if they don't exist."""
+    print("Initializing SQLite database...")
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # 1. Create USERS table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        full_name TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL CHECK(role IN ('Admin', 'Meteorologist', 'Analyst')),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    
+    # 2. Create WEATHER_DATA table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS weather_data (
+        data_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        annual_rainfall REAL NOT NULL,
+        seasonal_rainfall REAL NOT NULL,
+        cloud_cover REAL NOT NULL,
+        humidity REAL NOT NULL,
+        temperature REAL NOT NULL,
+        visibility REAL NOT NULL,
+        pressure REAL NOT NULL,
+        wind_speed REAL NOT NULL,
+        river_level REAL NOT NULL,
+        soil_moisture REAL NOT NULL,
+        entry_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(user_id)
+    );
+    """)
+    
+    # 3. Create ML_MODELS table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS ml_models (
+        model_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        model_name TEXT UNIQUE NOT NULL,
+        algorithm_type TEXT NOT NULL,
+        accuracy_score REAL NOT NULL,
+        model_file_path TEXT NOT NULL,
+        is_active INTEGER DEFAULT 0,
+        trained_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    
+    # 4. Create PREDICTION_RESULTS table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS prediction_results (
+        prediction_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        data_id INTEGER,
+        model_id INTEGER,
+        flood_risk_level TEXT NOT NULL,
+        flood_probability REAL NOT NULL,
+        prediction_timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(data_id) REFERENCES weather_data(data_id),
+        FOREIGN KEY(model_id) REFERENCES ml_models(model_id)
+    );
+    """)
+    
+    # 5. Seed Users if table is empty
+    cursor.execute("SELECT COUNT(*) FROM users;")
+    if cursor.fetchone()[0] == 0:
+        print("Seeding default users...")
+        default_users = [
+            ("System Admin", "admin@risingwaters.com", generate_password_hash("admin123"), "Admin"),
+            ("Lead Meteorologist", "meteo@risingwaters.com", generate_password_hash("meteo123"), "Meteorologist"),
+            ("Data Analyst", "analyst@risingwaters.com", generate_password_hash("analyst123"), "Analyst")
+        ]
+        cursor.executemany("""
+        INSERT INTO users (full_name, email, password_hash, role)
+        VALUES (?, ?, ?, ?);
+        """, default_users)
+        
+    # 6. Seed Models if table is empty
+    cursor.execute("SELECT COUNT(*) FROM ml_models;")
+    if cursor.fetchone()[0] == 0:
+        print("Seeding machine learning models...")
+        # Get metrics from JSON if possible, otherwise use fallback defaults
+        metrics = {}
+        best_model_name = "Random Forest"
+        if os.path.exists(METRICS_PATH):
+            try:
+                with open(METRICS_PATH, "r") as f:
+                    metrics = json.load(f)
+                    best_model_name = metrics.get("best_model_name", "Random Forest")
+            except Exception as e:
+                print(f"Error loading metrics.json: {e}")
+                
+        model_details = [
+            ("Decision Tree", "DecisionTreeClassifier", metrics.get("comparison", {}).get("Decision Tree", {}).get("accuracy", 0.9260), "model/model.pkl"),
+            ("Random Forest", "RandomForestClassifier", metrics.get("comparison", {}).get("Random Forest", {}).get("accuracy", 0.9400), "model/model.pkl"),
+            ("KNN", "KNeighborsClassifier", metrics.get("comparison", {}).get("KNN", {}).get("accuracy", 0.9360), "model/model.pkl"),
+            ("XGBoost", "XGBClassifier", metrics.get("comparison", {}).get("XGBoost", {}).get("accuracy", 0.9370), "model/model.pkl")
+        ]
+        
+        for name, alg, acc, path in model_details:
+            is_active = 1 if name == best_model_name else 0
+            cursor.execute("""
+            INSERT INTO ml_models (model_name, algorithm_type, accuracy_score, model_file_path, is_active)
+            VALUES (?, ?, ?, ?, ?);
+            """, (name, alg, acc, path, is_active))
+            
+    conn.commit()
+    conn.close()
+    print("Database initialization complete.")
+
+def verify_user(email, password):
+    """Verifies a user's password and returns their profile details."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE email = ?;", (email.strip().lower(),))
+    user = cursor.fetchone()
+    conn.close()
+    if user and check_password_hash(user["password_hash"], password):
+        return dict(user)
+    return None
+
+def update_user_password(email, new_password):
+    """Updates a user's password."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    hashed_pwd = generate_password_hash(new_password)
+    cursor.execute("UPDATE users SET password_hash = ? WHERE email = ?;", (hashed_pwd, email.strip().lower()))
+    conn.commit()
+    conn.close()
+
+def save_prediction_run(user_id, input_data, prediction_output, model_name):
+    """Saves a meteorological input run and its prediction output to the DB."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # Get active model ID
+        cursor.execute("SELECT model_id FROM ml_models WHERE model_name = ?;", (model_name,))
+        model_row = cursor.fetchone()
+        model_id = model_row["model_id"] if model_row else 1
+        
+        # Save weather input
+        cursor.execute("""
+        INSERT INTO weather_data (
+            user_id, annual_rainfall, seasonal_rainfall, cloud_cover, humidity, 
+            temperature, visibility, pressure, wind_speed, river_level, soil_moisture
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        """, (
+            user_id,
+            float(input_data["Annual_Rainfall"]),
+            float(input_data["Seasonal_Rainfall"]),
+            float(input_data["Cloud_Cover"]),
+            float(input_data["Humidity"]),
+            float(input_data["Temperature"]),
+            float(input_data["Visibility"]),
+            float(input_data["Pressure"]),
+            float(input_data["Wind_Speed"]),
+            float(input_data["River_Level"]),
+            float(input_data["Soil_Moisture"])
+        ))
+        data_id = cursor.lastrowid
+        
+        # Save prediction result
+        cursor.execute("""
+        INSERT INTO prediction_results (
+            data_id, model_id, flood_risk_level, flood_probability
+        ) VALUES (?, ?, ?, ?);
+        """, (
+            data_id,
+            model_id,
+            prediction_output["risk_level"],
+            prediction_output["probability"]
+        ))
+        
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        print(f"Error saving prediction to DB: {e}")
+        raise e
+    finally:
+        conn.close()
+
+def get_prediction_history(limit=50):
+    """Retrieves prediction ledger log entries."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(f"""
+    SELECT 
+        pr.prediction_id,
+        pr.flood_risk_level,
+        pr.flood_probability,
+        pr.prediction_timestamp,
+        m.model_name,
+        u.full_name as user_name,
+        wd.annual_rainfall,
+        wd.seasonal_rainfall,
+        wd.cloud_cover,
+        wd.humidity,
+        wd.temperature,
+        wd.visibility,
+        wd.pressure,
+        wd.wind_speed,
+        wd.river_level,
+        wd.soil_moisture
+    FROM prediction_results pr
+    JOIN weather_data wd ON pr.data_id = wd.data_id
+    JOIN ml_models m ON pr.model_id = m.model_id
+    LEFT JOIN users u ON wd.user_id = u.user_id
+    ORDER BY pr.prediction_timestamp DESC
+    LIMIT ?;
+    """, (limit,))
+    rows = cursor.fetchall()
+    conn.close()
+    
+    history = []
+    for r in rows:
+        history.append({
+            "prediction_id": r["prediction_id"],
+            "timestamp": r["prediction_timestamp"],
+            "model_name": r["model_name"],
+            "user_name": r["user_name"] or "System Guest",
+            "probability": r["flood_probability"],
+            "risk_level": r["flood_risk_level"],
+            "inputs": {
+                "Annual_Rainfall": r["annual_rainfall"],
+                "Seasonal_Rainfall": r["seasonal_rainfall"],
+                "Cloud_Cover": r["cloud_cover"],
+                "Humidity": r["humidity"],
+                "Temperature": r["temperature"],
+                "Visibility": r["visibility"],
+                "Pressure": r["pressure"],
+                "Wind_Speed": r["wind_speed"],
+                "River_Level": r["river_level"],
+                "Soil_Moisture": r["soil_moisture"]
+            }
+        })
+    return history
+
+def get_active_model():
+    """Retrieves the active model to use for prediction."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT model_name FROM ml_models WHERE is_active = 1;")
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return row["model_name"]
+    return "Random Forest"
+
+def set_active_model(model_name):
+    """Sets a model as active, making others inactive."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE ml_models SET is_active = 0;")
+        cursor.execute("UPDATE ml_models SET is_active = 1 WHERE model_name = ?;", (model_name,))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        print(f"Error setting active model: {e}")
+        raise e
+    finally:
+        conn.close()
+
+def get_models_list():
+    """Returns details for all registered models."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM ml_models ORDER BY accuracy_score DESC;")
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+def check_email_exists(email):
+    """Checks if email is registered in users table."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id, full_name, role FROM users WHERE email = ?;", (email.strip().lower(),))
+    user = cursor.fetchone()
+    conn.close()
+    if user:
+        return dict(user)
+    return None
+
+if __name__ == "__main__":
+    init_db()
